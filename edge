@@ -4,7 +4,6 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-
 def get_sobel(in_chan, out_chan):
     filter_x = np.array([
         [1, 0, -1],
@@ -38,7 +37,6 @@ def get_sobel(in_chan, out_chan):
 
     return sobel_x, sobel_y
 
-
 def run_sobel(conv_x, conv_y, input):
     g_x = conv_x(input)
     g_y = conv_y(input)
@@ -61,10 +59,9 @@ class Downsample_block(nn.Module):
 
         return x, y
 
-
-class ESAM(nn.Module):
+class EdgeModule(nn.Module):   #针对E1：
     def __init__(self, in_channels):
-        super(ESAM, self).__init__()
+        super(EdgeModule, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(in_channels, 1, kernel_size=1)
         self.bn = nn.BatchNorm2d(in_channels)
@@ -81,28 +78,52 @@ class ESAM(nn.Module):
 
         return y
 
+class SemanticModule(nn.Module):   #针对E2：语义模块：GAP（）表示全局平均池化，FC（）表示全连接层，ReLU（）和Softmax（）表示激活函数。
+    def __init__(self, in_channels):
+        super(SemanticModule, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(in_channels, 1, kernel_size=1)
 
-class Edgenet(nn.Module):
+        self.relu = nn.ReLU(inplace=False)
+        self.softmax = nn.Softmax(dim=-1)
+
+    def forward(self, x):
+        y = run_sobel(self.sobel_x1, self.sobel_y1, x)
+        y = F.relu(self.bn(y))
+        y = self.conv1(y)
+        y = x + y
+        y = self.conv2(y)
+        y = F.relu(self.ban(y))
+
+        return y
+
+class EdgeFeatureExtraction(nn.Module):
+def __init__(self):
+        super(EdgeFeatureExtraction, self).__init__()
+
+
+
+
+class EdgeEnhancement(nn.Module):  
     def __init__(self):
-        super(Edgenet, self).__init__()
+        super(EdgeEnhancement, self).__init__()
         in_chan = 2
         self.down1 = Downsample_block(in_chan, 64)
         self.down2 = Downsample_block(64, 128)
         self.down3 = Downsample_block(128, 256)
-        self.down4 = Downsample_block(256, 512)
+
         self.conv1 = nn.Conv2d(512, 1024, 3, padding=1)
         self.bn1 = nn.BatchNorm2d(1024)
         self.up = ESAM(1)
         self.up1 = ESAM(128)
         self.up2 = ESAM(256)
         self.up3 = ESAM(512)
-        self.up4 = ESAM(1024)
 
     def forward(self, x, feature=False):
         x, y1 = self.down1(x)   # 64
         x, y2 = self.down2(x)   # 128
         x, y3 = self.down3(x)   # 256
-        x, y4 = self.down4(x)   # 512
+
         y5 = F.relu(self.bn1(self.conv1(x)))    # 1024
         out1 = self.up1(y2)
 
