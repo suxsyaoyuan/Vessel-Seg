@@ -3,104 +3,76 @@ import math
 import torch.nn as nn
 import torch.nn.functional as F
 
-class GCN(nn.Module):
-    def __init__(self, num_feature, num_node, bias=False):
-        super(GCN, self).__init__()
-        self.conv1 = nn.Conv1d(num_node, num_node, kernel_size=1)
-        self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv1d(num_feature, num_feature, kernel_size=1, bias=bias)
+
+#通道注意力-Transformer
+class ChannelAttention(nn.Module): 
+    def __init__(self, in_channels):
+        super(ChannelAttention, self).__init__()
+
+        self.global_avg_pool = nn.AdaptiveAvgPool2d(1)  # 全局平均池化
+        self.global_max_pool = nn.AdaptiveMaxPool2d(1)  # 全局最大池化
+        self.fc = nn.Sequential(nn.Conv2d(in_channels, in_channels // 16, 1, bias=False),
+                               nn.ReLU(),
+                               nn.Conv2d(in_channels // 16, in_channels, 1, bias=False)) #mlp
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        h = self.conv1(x)
-        h = h - x
-        h = self.relu(self.conv2(h.permute(0, 2, 1)).permute(0, 2, 1))
-        return h
+        avg_out = self.fc(self.avg_pool(x))
+        max_out = self.fc(self.max_pool(x))
+        out = avg_out + max_out
+        sigmoid_out = self.sigmoid(out) # 通道注意力系数
+        out_CA = x*sigmoid_out
+        return out_CA
 
+#空间注意力-CNN
+class SpatialAttention(nn.Module):
+    def __init__(self, kernel_size):
+        super(SpatialAttention, self).__init__()
 
-class BilateralGCN(nn.Module):
-    def __init__(self, in_feature, num_node):
-        super().__init__()
-        self.gcn = GCN(in_feature, num_node)
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.max_pool = nn.AdaptiveMaxPool2d(1)
+        self.conv33 = nn.Conv2d(2, 1, kernel_size=3, padding=kernel_size//2, bias=False)  # 3x3 卷积
+        self.conv11 = nn.Conv2d(2, 1, kernel_size=1, padding=kernel_size//2，bias=False)  # 1x1 卷积
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x, y):
-        fusion = x + y
-        fusion = self.gcn(fusion)
-        x = x + fusion
-        y = y + fusion
+    def forward(self, x):
+        avg_out = self.avg_pool(x)
+        max_out = self.max_pool(x)
+        x1 = torch.cat([avg_out, max_out], dim=1)
+        x2 = self.conv33(x1)
+        x3 = self.conv11(x2)
+        sigmoid_out = self.sigmoid(x3)
 
-        return x, y
+        out_SA = x*sigmoid_out
+        return out_SA
 
-
-class TestModule(nn.Module):
-    def __init__(self, in_channel):
-        super(TestModule, self).__init__()
-        self.num_node = in_channel // 4
-        self.num_feature = in_channel // 2
-        self.BGCN = BilateralGCN(self.num_feature, self.num_node)
-        self.conv_v = nn.Conv2d(in_channel, self.num_node, kernel_size=1)
-        self.conv_w = nn.Conv2d(in_channel, self.num_feature, kernel_size=1)
-        self.conv = nn.Conv2d(self.num_feature, in_channel, kernel_size=1)
-        self.bn = nn.BatchNorm2d(in_channel)
-
-    def forward(self, x, y, x_fusion, y_fusion, concat=False):
-        if concat:
-            x = x + x_fusion
-            y = y + y_fusion
-
-        n, c, h, w = x.size()
-        L = h * w
-        x_v = self.conv_v(x).view(-1, self.num_node, L)
-        y_v = self.conv_v(y).view(-1, self.num_node, L)
-        x_w = self.conv_w(x).view(-1, self.num_feature, L)
-        x_w = torch.transpose(x_w, 1, 2)
-        y_w = self.conv_w(y).view(-1, self.num_feature, L)
-        y_w = torch.transpose(y_w, 1, 2)
-        x_graph = torch.bmm(x_v, x_w)
-        y_graph = torch.bmm(y_v, y_w)
-        x_graph = F.softmax(x_graph, dim=-1)
-        y_graph = F.softmax(y_graph, dim=-1)
-        x_graph, y_graph = self.BGCN(x_graph, y_graph)
-        x_graph = torch.bmm(torch.transpose(x_v, 1, 2), x_graph).view(-1, self.num_feature, h, w)
-        y_graph = torch.bmm(torch.transpose(y_v, 1, 2), y_graph).view(-1, self.num_feature, h, w)
-        x_fusion = self.conv(x_graph)
-        y_fusion = self.conv(y_graph)
-        x_fusion = F.relu(self.bn(x_fusion))
-        y_fusion = F.relu(self.bn(y_fusion))
-
-        return x + x_fusion, y + y_fusion
-
-class Downsample_block(nn.Module):
+#相关性增强
+class CorrelationEnhancement(nn.Module):     
     def __init__(self, in_channels, out_channels):
-        super(Downsample_block, self).__init__()
-        self.in_channels = in_channels
-        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(out_channels)
+        super(CorrelationEnhancement, self).__init__()
+        self.reshape = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
-    def forward(self, x, y):
-        x = F.relu(self.bn1(self.conv1(x)))
-        if self.in_channels != 1024:
-            x = F.max_pool2d(x, 2, stride=2)
-        y = F.relu(self.bn1(self.conv1(y)))
-        if self.in_channels != 1024:
-            y = F.max_pool2d(y, 2, stride=2)
+    def forward(self, T, C):
+        out = self.reshape(T)
+        out_CE = out * C
+        return out_CE
 
-        return x, y
-
-
-class fusion(nn.Module):
+#特征融合块
+class FeatureFusionBlock(nn.Module):     
     def __init__(self, in_channels, out_channels):
-        super(fusion, self).__init__()
+        super(FeatureFusionBlock, self).__init__()
 
-        self.in_channels = in_channels
-        self.reason = TestModule(in_channels)
-        self.down = Downsample_block(in_channels, out_channels)
+        self.conv11 = nn.Conv2d(2, 1, kernel_size=1, padding=kernel_size//2，bias=False)  # 1x1 卷积
+        self.relu = nn.ReLU()
+        self.bn = nn.BatchNorm(64)  #需要指定输入特征的维度
+        self.reshape = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
-    def forward(self, seg1, edge1, seg2, edge2):
-        if self.in_channels == 128:
-            Seg, Edge = self.reason(seg1, edge1, seg2, edge2, concat=False)
-        else:
-            Seg, Edge = self.reason(seg1, edge1, seg2, edge2, concat=True)
+    def forward(self, out_CE, out_CA, out_SA):
+        out = torch.cat([out_CE, out_CA, out_SA], dim=1)
+        out = self.conv11(out)
+        out = self.relu(out)
+        out = self.bn(out)
+        out = self.reshape(out)
 
-        Seg, Edge = self.down(Seg, Edge)
-
-        return Seg, Edge
+        return out
