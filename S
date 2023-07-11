@@ -1,46 +1,43 @@
 import torch
 import torch.nn as nn
 from torchvision.models import resnet34 as resnet
-import torch
-import torch.nn as nn
-from torchvision.models import resnet34
-from torchvision.models import resnet50
+#from torchvision.models import resnet50
 from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNorm
 import torch.nn.functional as F
 import numpy as np
 
+from swintransformer import *
+from FFM import *
+from EEM import *
+
+
+def Downsample():
+    return nn.MaxPool2d(kernel_size=2, stride=2)
 
 
 class TransFuse(nn.Module):
     def __init__(self, num_classes=1, drop_rate=0.2, normal_init=True, pretrained=False):
         super(TransFuse, self).__init__()
 
-        self.resnet = resnet34()
+        self.cnn = resnet34()
         if pretrained:
             self.resnet.load_state_dict(torch.load('pretrained/resnet34-333f7ec4.pth'))
+
         self.resnet.fc = nn.Identity()
         self.resnet.layer4 = nn.Identity()
 
-        self.transformer = deit(pretrained=pretrained)
+        self.transformer = SwinTransformer()
 
-        self.up1 = Up(in_ch1=384, out_ch=128)
-        self.up2 = Up(128, 64)
+        self.fusion1 = fusion(128, 256)
+        self.fusion2 = fusion(256, 512)
+        self.fusion3 = fusion(512, 1024)
 
-        self.final_x = nn.Sequential(
-            Conv(256, 64, 1, bn=True, relu=True),
-            Conv(64, 64, 3, bn=True, relu=True),
-            Conv(64, num_classes, 3, bn=False, relu=False)
-            )
 
-        self.final_1 = nn.Sequential(
-            Conv(64, 64, 3, bn=True, relu=True),
-            Conv(64, num_classes, 3, bn=False, relu=False)
-            )
+        self.upe1 = ESAM(1024)
+        self.upe2 = ESAM(512)
+        self.upe3 = ESAM(256)
+        self.upe4 = ESAM(128)
 
-        self.final_2 = nn.Sequential(
-            Conv(64, 64, 3, bn=True, relu=True),
-            Conv(64, num_classes, 3, bn=False, relu=False)
-            )
 
         self.up_c = BiFusion_block(ch_1=256, ch_2=384, r_2=4, ch_int=256, ch_out=256, drop_rate=drop_rate/2)
 
