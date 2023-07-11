@@ -54,6 +54,7 @@ class CTE(nn.Module):
         out = self.edge2(e2, m3)
 
         #decoder
+        out = F.interpolate(out, scale_factor=4, mode='bilinear')
         out = self.sigmoid(out)
        
         return out
