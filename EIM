@@ -1,66 +1,72 @@
-import torch
+"""
+Copyright (C) 2019 NVIDIA Corporation.  All rights reserved.
+Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
+"""
+
 import torch.nn as nn
+import torch
 import torch.nn.functional as F
+from torch.nn.modules.conv import _ConvNd
+from torch.nn.modules.utils import _pair
+import numpy as np
 import math
+from models.layers.config import cfg
 
-class BIM(nn.Module):
-    def __init__(self, num_classes=2, norm_layer=nn.BatchNorm2d):
-        super(BIM, self).__init__()
 
-        self.d_in1 = conv_bn_relu(36, 36, 1, norm_layer=norm_layer)
-        self.d_in2 = conv_bn_relu(36, 36, 1, norm_layer=norm_layer)
-        self.d_in3 = conv_bn_relu(36, 36, 1, norm_layer=norm_layer)
+def Norm2d(in_channels):
+    """
+    Custom Norm Function to allow flexible switching
+    """
+    layer = getattr(cfg.MODEL,'BNFUNC')
+    normalizationLayer = layer(in_channels)
+    return normalizationLayer
 
-        self.gate1 = conv_sigmoid(36, 36)
-        self.gate2 = conv_sigmoid(36, 36)
-        self.gate3 = conv_sigmoid(36, 36)
 
-        in_channel = 36
-        self.dense_3 = DenseBlock(in_channel, 36, 36, 3, drop_out=0, norm_layer=norm_layer)
-        self.dense_6 = DenseBlock(in_channel + 36, 36, 36, 6, drop_out=0, norm_layer=norm_layer)
-        self.dense_9 = DenseBlock(in_channel + 36 * 2, 36, 36, 9, drop_out=0, norm_layer=norm_layer)
+class GatedSpatialConv2d(_ConvNd):
+    def __init__(self, in_channels, out_channels, kernel_size=1, stride=1,
+                 padding=0, dilation=1, groups=1, bias=False):
+        """
 
-        self.cls = nn.Sequential(
-            nn.Conv2d(144, 64, kernel_size=3, padding=1, bias=False),
-            norm_layer(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1, bias=False),
-            norm_layer(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(64, num_classes, kernel_size=1, bias=False))
+        :param in_channels:
+        :param out_channels:
+        :param kernel_size:
+        :param stride:
+        :param padding:
+        :param dilation:
+        :param groups:
+        :param bias:
+        """
 
-    def forward(self, m2, m5, aspp):
-        m2_size = m2.size()[2:]
-        m5_size = m5.size()[2:]
-        aspp_size = aspp.size()[2:]
+        kernel_size = _pair(kernel_size)
+        stride = _pair(stride)
+        padding = _pair(padding)
+        dilation = _pair(dilation)
+        super(GatedSpatialConv2d, self).__init__(
+            in_channels, out_channels, kernel_size, stride, padding, dilation,
+            False, _pair(0), groups, bias, 'zeros')
 
-        g_m2 = self.gate1(m2)
-        g_m5 = self.gate2(m5)
-        g_aspp = self.gate3(aspp)
+        self._gate_conv = nn.Sequential(
+            Norm2d(in_channels + 1),
+            nn.Conv2d(in_channels + 1, in_channels + 1, 1),
+            nn.ReLU(),
+            nn.Conv2d(in_channels + 1, 1, 1),
+            Norm2d(1),
+            nn.Sigmoid()
+        )
 
-        m2 = self.d_in1(m2)
-        m5 = self.d_in2(m5)
-        aspp = self.d_in3(aspp)
+    def forward(self, input_features, gating_features):
+        """
+        :param input_features:  [NxCxHxW]  featuers comming from the shape branch (canny branch).
+        :param gating_features: [Nx1xHxW] features comming from the texture branch (resnet). Only one channel feature map.
+        :return:
+        """
+        alphas = self._gate_conv(torch.cat([input_features, gating_features], dim=1))
 
-        m2 = m2 + g_m2 * m2 + (1 - g_m2) * (Upsample(g_m5 * m5, size=m2_size) + Upsample(g_aspp * aspp, size=m2_size))
-        m5 = m5 + g_m5 * m5 + (1 - g_m5) * (
-                Upsample(g_m2 * m2, size=m5_size) + Upsample(g_aspp * aspp, size=m5_size))
-        aspp_f = aspp + aspp * g_aspp + (1 - g_aspp) * (
-                Upsample(g_m5 * m5, size=aspp_size) + Upsample(g_m2 * m2, size=aspp_size))
+        input_features = (input_features * (alphas + 1))
+        return F.conv2d(input_features, self.weight, self.bias, self.stride,
+                        self.padding, self.dilation, self.groups)
 
-        aspp_f = Upsample(aspp_f, size=m2_size)
-        aspp = Upsample(aspp, size=m2_size)
-        m5 = Upsample(m5, size=m2_size)
-
-        out = aspp_f
-        aspp_f = self.dense_3(out)
-        out = torch.cat([aspp_f, m5], dim=1)
-        m5 = self.dense_6(out)
-        out = torch.cat([aspp_f, m5, m2], dim=1)
-        m2 = self.dense_9(out)
-
-        f = torch.cat([aspp_f, aspp, m5, m2], dim=1)
-
-        out = self.cls(f)
-
-        return out
+    def reset_parameters(self):
+        nn.init.xavier_normal_(self.weight)
+        if self.bias is not None:
+            nn.init.zeros_(self.bias)
