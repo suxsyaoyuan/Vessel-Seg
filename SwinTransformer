@@ -576,3 +576,179 @@ class Swintransformer(nn.Module):
         for i, layer in enumerate(self.layers):
             flops += layer.flops()
         return flops
+
+
+
+def _cfg(url='', **kwargs):
+    return {
+        'url': url,
+        'num_classes': 1000, 'input_size': (3, 224, 224), 'pool_size': (7, 7),
+        'crop_pct': .9, 'interpolation': 'bicubic', 'fixed_input_size': True,
+        'mean': IMAGENET_DEFAULT_MEAN, 'std': IMAGENET_DEFAULT_STD,
+        'first_conv': 'patch_embed.proj', 'classifier': 'head.fc',
+        'license': 'mit', **kwargs
+    }
+
+
+default_cfgs = generate_default_cfgs({
+    'swin_small_patch4_window7_224.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22kto1k_finetune.pth', ),
+    'swin_base_patch4_window7_224.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22kto1k.pth',),
+    'swin_base_patch4_window12_384.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window12_384_22kto1k.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+    'swin_large_patch4_window7_224.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22kto1k.pth',),
+    'swin_large_patch4_window12_384.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window12_384_22kto1k.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+
+    'swin_tiny_patch4_window7_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_tiny_patch4_window7_224.pth',),
+    'swin_small_patch4_window7_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_small_patch4_window7_224.pth',),
+    'swin_base_patch4_window7_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224.pth',),
+    'swin_base_patch4_window12_384.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window12_384.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0),
+
+    # tiny 22k pretrain is worse than 1k, so moved after (untagged priority is based on order)
+    'swin_tiny_patch4_window7_224.ms_in22k_ft_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22kto1k_finetune.pth',),
+
+    'swin_tiny_patch4_window7_224.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_tiny_patch4_window7_224_22k.pth',
+        num_classes=21841),
+    'swin_small_patch4_window7_224.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.8/swin_small_patch4_window7_224_22k.pth',
+        num_classes=21841),
+    'swin_base_patch4_window7_224.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window7_224_22k.pth',
+        num_classes=21841),
+    'swin_base_patch4_window12_384.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_base_patch4_window12_384_22k.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21841),
+    'swin_large_patch4_window7_224.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window7_224_22k.pth',
+        num_classes=21841),
+    'swin_large_patch4_window12_384.ms_in22k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/SwinTransformer/storage/releases/download/v1.0.0/swin_large_patch4_window12_384_22k.pth',
+        input_size=(3, 384, 384), pool_size=(12, 12), crop_pct=1.0, num_classes=21841),
+
+    'swin_s3_tiny_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_t-1d53f6a8.pth'),
+    'swin_s3_small_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_s-3bb4c69d.pth'),
+    'swin_s3_base_224.ms_in1k': _cfg(
+        hf_hub_id='timm/',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/s3_b-a1e95db4.pth'),
+})
+
+
+@register_model
+def swin_tiny_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-T @ 224x224, trained ImageNet-1k
+    """
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_tiny_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_small_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-S @ 224x224
+    """
+    model_args = dict(patch_size=4, window_size=7, embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer(
+        'swin_small_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_base_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-B @ 224x224
+    """
+    model_args = dict(patch_size=4, window_size=7, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_base_patch4_window12_384(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-B @ 384x384
+    """
+    model_args = dict(patch_size=4, window_size=12, embed_dim=128, depths=(2, 2, 18, 2), num_heads=(4, 8, 16, 32))
+    return _create_swin_transformer(
+        'swin_base_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_large_patch4_window7_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-L @ 224x224
+    """
+    model_args = dict(patch_size=4, window_size=7, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window7_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_large_patch4_window12_384(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-L @ 384x384
+    """
+    model_args = dict(patch_size=4, window_size=12, embed_dim=192, depths=(2, 2, 18, 2), num_heads=(6, 12, 24, 48))
+    return _create_swin_transformer(
+        'swin_large_patch4_window12_384', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_s3_tiny_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-S3-T @ 224x224, https://arxiv.org/abs/2111.14725
+    """
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 6, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_tiny_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_s3_small_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-S3-S @ 224x224, https://arxiv.org/abs/2111.14725
+    """
+    model_args = dict(
+        patch_size=4, window_size=(14, 14, 14, 7), embed_dim=96, depths=(2, 2, 18, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_small_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+@register_model
+def swin_s3_base_224(pretrained=False, **kwargs) -> SwinTransformer:
+    """ Swin-S3-B @ 224x224, https://arxiv.org/abs/2111.14725
+    """
+    model_args = dict(
+        patch_size=4, window_size=(7, 7, 14, 7), embed_dim=96, depths=(2, 2, 30, 2), num_heads=(3, 6, 12, 24))
+    return _create_swin_transformer('swin_s3_base_224', pretrained=pretrained, **dict(model_args, **kwargs))
+
+
+register_model_deprecations(__name__, {
+    'swin_base_patch4_window7_224_in22k': 'swin_base_patch4_window7_224.ms_in22k',
+    'swin_base_patch4_window12_384_in22k': 'swin_base_patch4_window12_384.ms_in22k',
+    'swin_large_patch4_window7_224_in22k': 'swin_large_patch4_window7_224.ms_in22k',
+    'swin_large_patch4_window12_384_in22k': 'swin_large_patch4_window12_384.ms_in22k',
+})
